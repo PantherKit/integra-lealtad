@@ -6,15 +6,15 @@
   "serialNumber": "demo-001",
   "description": "Tarjeta de Lealtad Digital",
 
-  "foregroundColor": "rgb(240, 245, 235)",
-  "backgroundColor": "rgb(60, 80, 70)",
-  "labelColor": "rgb(200, 210, 190)",
-  "logoText": "Café Roma",
+  "foregroundColor": "rgb(57, 109, 234)",
+  "backgroundColor": "rgb(255, 254, 249)",
+  "labelColor": "rgb(57, 109, 234)",
+  "logoText": "MARQUESITAS OMO",
 
   "barcodes": [
     {
       "message": "INTEGRA-DEMO-001",
-      "format": "PKBarcodeFormatQR",
+      "format": "PKBarcodeFormatCode128",
       "messageEncoding": "iso-8859-1",
       "altText": "Powered by Integra Lealtad"
     }
@@ -38,7 +38,7 @@
       {
         "key": "merchant_name",
         "label": "Comercio",
-        "value": "Café Roma"
+        "value": "Marquesitas OMO"
       },
       {
         "key": "member",

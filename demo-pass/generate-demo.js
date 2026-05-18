@@ -18,12 +18,13 @@ const CONFIG = {
 /* ─── PATHS ───────────────────────────────────────────────────────────── */
 const CERTS_DIR = path.join(__dirname, 'certs');
 const MODEL_DIR = path.join(__dirname, 'integra-lealtad.pass');
+const ASSETS_DIR = path.join(__dirname, 'assets');
 const OUTPUT    = path.join(__dirname, 'demo-integra-lealtad.pkpass');
 
 /* ─── DEMO DATA ───────────────────────────────────────────────────────── */
 const DEMO_DATA = {
   merchant: {
-    name:    'Café Roma',
+    name:    'Marquesitas OMO',
     address: 'Orizaba 161, Roma Norte, CDMX',
     lat:     19.4194,
     lon:    -99.1566,
@@ -31,7 +32,7 @@ const DEMO_DATA = {
   customer: {
     name:     'Juan García',
     memberId: 'DEMO-001',
-    stamps:   5,
+    stamps:   6,
     stampsToReward: '3 sellos',
     prizes:   '0 premios',
     tier:     'Gold',
@@ -81,88 +82,79 @@ function solidColorPNG(width, height, [r, g, b]) {
   ]);
 }
 
-/* ─── SVG STRIP (via sharp) ───────────────────────────────────────────── */
+/* ─── STRIP GENERATOR (Compositing con sharp) ─────────────────────────── */
 
-/**
- * Dibuja un ícono outline estilo Lucide/Hugeicons. Evitamos dependencias de
- * icon packs para mantener el generador portable y sin riesgo de licencias.
- */
-function stampIcon(cx, cy, size, isActive) {
-  const color = isActive ? '#F0F5EB' : '#A0B0A0';
-  const opacity = isActive ? '1' : '0.4';
-  const strokeWidth = 1.9;
-  const scale = size / 24;
-  const x = cx - size / 2;
-  const y = cy - size / 2;
-
-  return `
-    <g transform="translate(${x} ${y}) scale(${scale})"
-       fill="none"
-       stroke="${color}"
-       stroke-width="${strokeWidth}"
-       stroke-linecap="round"
-       stroke-linejoin="round"
-       opacity="${opacity}">
-      <path d="M10 2v2"/>
-      <path d="M14 2v2"/>
-      <path d="M6 8h11v6a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V8Z"/>
-      <path d="M17 9h1a3 3 0 0 1 0 6h-1"/>
-      <path d="M4 21h16"/>
-    </g>`;
-}
-
-/**
- * Construye el SVG del strip a las dimensiones dadas.
- * Diseñado a base @1x (375×123) y escalado proporcionalmente.
- */
-function buildStripSVG(w, h) {
-  const s = w / 375;
-  const totalStamps = 8;
-  const filled = Math.min(DEMO_DATA.customer.stamps, totalStamps);
-  const size = 32 * s;
-  const colGap = 46 * s;
-  const rowGap = 44 * s;
-  const gridWidth = (3 * colGap) + size;
-  const startX = (w - gridWidth) / 2 + size / 2;
-  const startY = 38 * s;
-
-  const stamps = Array.from({ length: totalStamps }, (_, i) => {
-    const row = i < 4 ? 0 : 1;
-    const col = i % 4;
-    const cx = startX + col * colGap;
-    const cy = startY + row * rowGap;
-    return stampIcon(cx, cy, size, i < filled);
-  }).join('\n');
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#3C5046"/>
-      <stop offset="100%" stop-color="#3C5046"/>
-    </linearGradient>
-  </defs>
-  <rect width="${w}" height="${h}" fill="url(#bg)"/>
-  ${stamps}
-</svg>`;
-}
-
-/**
- * Genera strip.png y strip@2x.png usando sharp para rasterizar el SVG.
- * Siempre regenera (no "si no existe") para reflejar cambios en DEMO_DATA.
- */
 async function generateStrip() {
   const sizes = [
-    { name: 'strip.png',    w: 375, h: 123 },
-    { name: 'strip@2x.png', w: 750, h: 246 },
+    { name: 'strip.png',    w: 375, h: 123, scale: 1 },
+    { name: 'strip@2x.png', w: 750, h: 246, scale: 2 },
   ];
 
-  for (const { name, w, h } of sizes) {
-    const svg  = buildStripSVG(w, h);
+  const totalStamps = 8;
+  const filled = Math.min(DEMO_DATA.customer.stamps, totalStamps);
+
+  // Rutas de los assets reales
+  // Nota: hay un typo en el nombre del archivo en disco (maqruqesita)
+  const activeAssetPath = path.join(ASSETS_DIR, 'marquesita@2x.png');
+  const inactiveAssetPath = path.join(ASSETS_DIR, 'maqruqesita_default@2x.png');
+
+  // Leemos los buffers de las imágenes una sola vez
+  const activeBuffer = fs.readFileSync(activeAssetPath);
+  const inactiveBuffer = fs.readFileSync(inactiveAssetPath);
+
+  for (const { name, w, h, scale } of sizes) {
+    // Tamaño base del ícono a 1x es ~32px, escalamos según la resolución
+    const iconSize = Math.round(32 * scale);
+    
+    // Redimensionamos los assets al tamaño necesario para esta resolución
+    // La marquesita inactiva la hacemos un poco transparente para que se vea como "apagada"
+    const activeIcon = await sharp(activeBuffer).resize(iconSize, iconSize, { fit: 'inside' }).toBuffer();
+    const inactiveIcon = await sharp(inactiveBuffer)
+      .resize(iconSize, iconSize, { fit: 'inside' })
+      .ensureAlpha()
+      .toBuffer();
+
+    // Layout grid — safe area interna para evitar el crop horizontal de Wallet
+    const leftPad = Math.round(40 * scale);
+    const baseColGap = (w - 2 * leftPad - iconSize) / 3;
+    const colGap  = Math.round(baseColGap * 0.8);
+    const rowGap  = Math.round(44 * scale * 0.8);
+    const gridWidth = (3 * colGap) + iconSize;
+    const startX  = Math.round((w - gridWidth) / 2);
+    const startY  = Math.round(8 * scale); // el título vive en logoText, fuera del strip
+
+    const compositeArray = [];
+
+    // Preparamos las posiciones de los 8 sellos
+    for (let i = 0; i < totalStamps; i++) {
+      const row = i < 4 ? 0 : 1;
+      const col = i % 4;
+      const x = startX + col * colGap;
+      const y = startY + row * rowGap;
+      
+      compositeArray.push({
+        input: i < filled ? activeIcon : inactiveIcon,
+        top: y,
+        left: x,
+      });
+    }
+
+    // Creamos el fondo verde oscuro y le pegamos los sellos
     const dest = path.join(MODEL_DIR, name);
-    await sharp(Buffer.from(svg)).png().toFile(dest);
+    await sharp({
+      create: {
+        width: w,
+        height: h,
+        channels: 4,
+        background: { r: 255, g: 254, b: 249, alpha: 1 } // #fffef9
+      }
+    })
+    .composite(compositeArray)
+    .png()
+    .toFile(dest);
   }
 
-  console.log('  [OK] Strip generado (SVG + sharp)');
+  console.log('  [OK] Strip generado (Compositing con assets reales)');
 }
 
 /* ─── ASSETS DE ICONO / LOGO ─────────────────────────────────────────── */
