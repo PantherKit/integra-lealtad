@@ -19,6 +19,7 @@ import {
   getMyMerchant,
 } from '@/lib/api';
 import LoyaltyPass from '@/components/LoyaltyPass';
+import QrCode from '@/components/QrCode';
 import { cn } from '@/lib/cn';
 
 const COLORS = [
@@ -124,16 +125,31 @@ export default function OnboardingPage() {
             </div>
             <h2 className="text-xl font-semibold">¡Tu programa está listo!</h2>
             <p className="text-gray-500 text-sm mt-1 mb-6">
-              Comparte este enlace o ponlo en un QR en tu mostrador. Tus clientes
-              se dan de alta en 10 segundos, sin descargar nada.
+              Pon este QR en tu mostrador o comparte el enlace. Tus clientes se
+              dan de alta en 10 segundos, sin descargar nada.
             </p>
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 inline-block mb-4">
+              <QrCode value={shareUrl} size={208} />
+            </div>
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
               <span className="truncate flex-1 text-left text-gray-700">{shareUrl}</span>
               <button
                 onClick={() => {
-                  navigator.clipboard?.writeText(shareUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
+                  const done = () => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  };
+                  if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(shareUrl).then(done).catch(done);
+                  } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = shareUrl;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    done();
+                  }
                 }}
                 className="flex items-center gap-1 text-brand-600 font-medium shrink-0"
               >
