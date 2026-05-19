@@ -127,6 +127,8 @@ export class IntegraLoyaltyStack extends cdk.Stack {
         COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
         AWS_REGION_HINT: this.region,
         APPLE_PASS_SECRET: 'integra-loyalty/apple-pass',
+        // Base que el pase declara como webServiceURL (Apple le agrega /v1).
+        PUBLIC_API_URL: 'https://tcsbnd5m3l.execute-api.us-east-1.amazonaws.com',
       },
       bundling: {
         format: nodeLambda.OutputFormat.ESM,

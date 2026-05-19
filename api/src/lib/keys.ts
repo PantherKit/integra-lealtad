@@ -19,6 +19,17 @@ function reverseTimestamp(iso: string): string {
   return iso;
 }
 
+// PassKit Web Service — registro device<->pass
+// SK = PASSREG#<cardId>#<deviceLibraryIdentifier> (query por card con begins_with)
+export const passRegSk = (cardId: string, deviceLibraryIdentifier: string) =>
+  `PASSREG#${cardId}#${deviceLibraryIdentifier}` as const;
+// prefijo para query "todos los registros de una card"
+export const passRegSkPrefix = (cardId: string) => `PASSREG#${cardId}#` as const;
+// GSI2 — listar registros por device
+export const deviceGsi2Pk = (deviceLibraryIdentifier: string) =>
+  `DEVICE#${deviceLibraryIdentifier}` as const;
+export const passRegGsi2Sk = (cardId: string) => `PASSREG#${cardId}` as const;
+
 // GSI1 — lookup user/customer por email/phone
 export const emailGsi1Pk = (email: string) => `EMAIL#${email.toLowerCase().trim()}` as const;
 export const userGsi1Sk = (userId: string) => `USER#${userId}` as const;

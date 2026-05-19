@@ -4,6 +4,7 @@ import { getCard, getCardById, listCardsByPhoneInTenant, stampCard, redeemCard }
 import { getProgram } from '../lib/repositories/program';
 import { getMerchantByTenant } from '../lib/repositories/merchant';
 import { buildPkpass } from '../lib/applePass';
+import { notifyPassUpdate } from '../lib/apns';
 import { StampInput, RedeemInput } from '../lib/entities';
 
 export const cards = new Hono();
@@ -101,6 +102,9 @@ cards.post('/:id/stamp', requireTenant, requireRole(...MERCHANT_ROLES), async (c
       performedByUserId: userId,
       note: parsed.data.note,
     });
+    // Best-effort: actualiza el pase de Apple Wallet vía APNs. No bloquea
+    // ni afecta el 200 al comercio si APNs falla.
+    void notifyPassUpdate(tenantId, cardId).catch(() => {});
     return c.json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';
@@ -139,6 +143,9 @@ cards.post('/:id/redeem', requireTenant, requireRole(...MERCHANT_ROLES), async (
       performedByUserId: userId,
       note: parsed.data.note,
     });
+    // Best-effort: actualiza el pase de Apple Wallet vía APNs. No bloquea
+    // ni afecta el 200 al comercio si APNs falla.
+    void notifyPassUpdate(tenantId, cardId).catch(() => {});
     return c.json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';

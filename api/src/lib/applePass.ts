@@ -3,13 +3,14 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import { deflateSync } from 'node:zlib';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHmac } from 'node:crypto';
 import type { Card, LoyaltyProgram, Merchant } from './entities';
 
 // =============================================================================
 // Cert loading (Secrets Manager + local fallback para verificación local)
 // =============================================================================
 
-interface PassCredentials {
+export interface PassCredentials {
   signerCert: string;
   signerKey: string;
   wwdr: string;
@@ -81,6 +82,32 @@ async function getCredentials(): Promise<PassCredentials> {
     }
     throw err;
   }
+}
+
+/**
+ * Acceso a las credenciales de los certs Apple (cargadas con cache + fallback).
+ * Usado por el push APNs (necesita signerCert/signerKey/passphrase/passTypeId).
+ */
+export async function getPassCredentials(): Promise<PassCredentials> {
+  return getCredentials();
+}
+
+// =============================================================================
+// PassKit Web Service — authenticationToken determinístico
+// =============================================================================
+
+/**
+ * Token de autenticación del pase, determinístico por cardId.
+ * Apple lo envía como `Authorization: ApplePass <token>` en cada request
+ * del Web Service. No requiere almacenamiento: se recalcula y compara.
+ *
+ * NOTA: usa la passphrase de los certs como SECRET por defecto. Esto crea
+ * una dependencia async (carga de creds). Cae a PASS_AUTH_SECRET si está.
+ */
+export async function passAuthToken(cardId: string): Promise<string> {
+  const envSecret = process.env.PASS_AUTH_SECRET;
+  const secret = envSecret ?? (await getCredentials()).passphrase;
+  return createHmac('sha256', secret).update(cardId).digest('hex');
 }
 
 // =============================================================================
@@ -189,6 +216,15 @@ export async function buildPkpass({ card, program, merchant }: BuildPkpassArgs):
   const logo = solidPng(160, br, bg, bb);
   const logo2x = solidPng(320, br, bg, bb);
 
+  // Web Service: Apple le agrega /v1 — la URL va SIN slash final y SIN /v1.
+  const webServiceURL =
+    process.env.PUBLIC_API_URL ?? 'https://tcsbnd5m3l.execute-api.us-east-1.amazonaws.com';
+  // Mismo cálculo que passAuthToken(): creds ya están cargadas aquí (sync).
+  const authSecret = process.env.PASS_AUTH_SECRET ?? creds.passphrase;
+  const authenticationToken = createHmac('sha256', authSecret)
+    .update(card.cardId)
+    .digest('hex');
+
   const passJson = {
     formatVersion: 1,
     passTypeIdentifier: creds.passTypeId,
@@ -200,6 +236,8 @@ export async function buildPkpass({ card, program, merchant }: BuildPkpassArgs):
     backgroundColor: bgRgb,
     foregroundColor: 'rgb(255, 255, 255)',
     labelColor: 'rgb(255, 255, 255)',
+    webServiceURL,
+    authenticationToken,
     storeCard: {},
   };
 
